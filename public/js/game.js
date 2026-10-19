@@ -61,11 +61,14 @@
     return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
   }
 
-  function create(name, species, now) {
+  const STYLES = { cute: 'Q 版', real: '写实' };
+
+  function create(name, species, now, style = 'cute') {
     return {
       version: 2,
       name,
       species,
+      style: STYLES[style] ? style : 'cute',
       bornAt: now,
       hatchedAt: null,
       updatedAt: now,
@@ -87,6 +90,7 @@
     const base = create(s.name || '小团子', SPECIES[s.species] ? s.species : 'cat', s.bornAt || Date.now());
     const out = Object.assign({}, base, s);
     out.species = base.species;
+    out.style = STYLES[s.style] ? s.style : 'cute';
     out.stats = Object.assign({}, base.stats, s.stats);
     out.wearing = Object.assign({ head: null, face: null, neck: null }, s.wearing);
     out.daily = Object.assign({ date: null, strokes: 0, strokeCoins: 0 }, s.daily);
@@ -279,7 +283,7 @@
   }
 
   const Game = {
-    SPECIES, STAGES, FOODS, ITEMS, STAT_NAMES, DAILY_BONUS,
+    SPECIES, STYLES, STAGES, FOODS, ITEMS, STAT_NAMES, DAILY_BONUS,
     create, normalize, stage, nextStage, hatch, tick, claimDaily,
     canFeed, feed, stroke, scrub, playBall, canPlayGame, finishGame,
     sleep, wake, buy, toggleWear, mood, ageDays,

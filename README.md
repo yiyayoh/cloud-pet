@@ -4,7 +4,15 @@
 
 在浏览器里养一只软乎乎的小团子。它住在云端:你不在的时候,它也会饿、会困、会变脏、会想你;回来时它会跑过来跟你打招呼。
 
-![8 种宠物](docs/pets.png)
+两种画风任选,随时一键切换:
+
+**Q 版萌宠**
+
+![Q 版宠物](docs/pets.png)
+
+**写实萌宠**(真实比例、毛发质感、写实眼睛,开心时会摇尾巴;哺乳动物装在纸箱里送来,点几下会慢慢探出头)
+
+![写实宠物](docs/pets-real.png)
 
 ## 怎么玩
 
@@ -48,7 +56,8 @@ public/
   index.html
   css/style.css      样式、表情切换、所有动画
   js/game.js         游戏规则(属性衰减、成长、金币、商店),不依赖 DOM,有单元测试
-  js/pet-svg.js      用 SVG 绘制 8 种宠物、表情、装扮和蛋
+  js/pet-svg.js      Q 版:用 SVG 绘制 8 种宠物、表情、装扮和蛋
+  js/pet-real.js     写实版:同样 8 种宠物,共用表情和互动
   js/app.js          界面与互动
   js/minigame.js     接零食小游戏
   js/sound.js        WebAudio 合成音效

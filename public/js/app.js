@@ -32,6 +32,7 @@
   let poke = { n: 0, t: 0 };
   let eggTaps = 0;
   let selectedSpecies = 'cat';
+  let selectedStyle = 'cute';
 
   const FOOD_LINES = {
     rice: ['饭团真香~', '吧唧吧唧', '吃饱饱!'],
@@ -59,11 +60,12 @@
   }
 
   function renderAdopt() {
+    $$('#styleTabs button').forEach((b) => b.classList.toggle('active', b.dataset.style === selectedStyle));
     el.speciesGrid.innerHTML = '';
     for (const [id, sp] of Object.entries(G.SPECIES)) {
       const b = document.createElement('button');
       b.className = 'species-card' + (id === selectedSpecies ? ' selected' : '');
-      b.innerHTML = PetSVG.build(id) + `<span>${sp.name}</span>`;
+      b.innerHTML = PetSVG.build(id, { style: selectedStyle }) + `<span>${sp.name}</span>`;
       b.onclick = () => {
         selectedSpecies = id;
         Sound.pop();
@@ -77,9 +79,13 @@
     const st = G.stage(state);
     const next = G.nextStage(state);
     $('#hudName').textContent = state.name;
-    $('#hudStage').textContent = st.name;
+    const inBox = PetSVG.hatchKind(state.species, state.style) === 'box';
+    $('#hudStage').textContent = st.id === 'egg' && inBox ? '纸箱' : st.name;
     const days = G.ageDays(state, Date.now());
-    $('#hudAge').textContent = state.hatchedAt ? (days === 0 ? '今天出生' : `${days} 天大`) : '等待破壳';
+    $('#hudAge').textContent = state.hatchedAt ? (days === 0 ? '今天出生' : `${days} 天大`) : (inBox ? '躲在纸箱里' : '等待破壳');
+    const styleBtn = $('#styleBtn');
+    styleBtn.hidden = false;
+    styleBtn.textContent = state.style === 'real' ? '🎨 Q 版' : '🎨 写实';
     el.coins.textContent = state.coins;
 
     $('#xpWrap').hidden = !state.hatchedAt;
@@ -110,12 +116,12 @@
 
   function renderPet() {
     const st = G.stage(state);
-    const key = [state.species, st.id, JSON.stringify(state.wearing)].join('|');
+    const key = [state.species, state.style, st.id, JSON.stringify(state.wearing)].join('|');
     if (key !== builtKey) {
       builtKey = key;
       el.petScale.innerHTML = st.id === 'egg'
-        ? PetSVG.egg(state.species)
-        : PetSVG.build(state.species, { wearing: state.wearing, shell: st.id === 'baby' && !state.wearing.head });
+        ? PetSVG.egg(state.species, state.style)
+        : PetSVG.build(state.species, { style: state.style, wearing: state.wearing, shell: st.id === 'baby' && !state.wearing.head });
     }
     el.petWrap.style.setProperty('--scale', st.scale);
     if (st.id === 'egg') {
@@ -131,7 +137,11 @@
 
   function updateHint() {
     let text = '';
-    if (!state.hatchedAt) text = '轻轻点蛋蛋,帮它破壳吧 🥚';
+    if (!state.hatchedAt) {
+      text = PetSVG.hatchKind(state.species, state.style) === 'box'
+        ? '纸箱在动……轻轻点点,看看里面是谁 📦'
+        : '轻轻点蛋蛋,帮它破壳吧 🥚';
+    }
     else if (state.sleeping) text = '嘘……它在睡觉,精力会慢慢恢复';
     else if (!mode && !panel) text = '用手指在它身上来回摸摸,或者戳它一下~';
     el.hint.textContent = text;
@@ -194,7 +204,7 @@
 
   function mouthClient() {
     const r = svg().getBoundingClientRect();
-    return [r.left + r.width * 0.5, r.top + r.height * 0.67];
+    return [r.left + r.width * 0.5, r.top + r.height * Number(svg().dataset.mouthY || 0.67)];
   }
 
   function spawn(cls, x, y, html = '', opts = {}) {
@@ -260,6 +270,9 @@
 
   function look(x, y) {
     if (!isPetSvg()) return;
+    const k = Number(svg().dataset.look || 1);
+    x *= k;
+    y *= k;
     if (el.petScale.classList.contains('flip')) x = -x;
     for (const g of svg().querySelectorAll('.eyes-look')) g.style.transform = `translate(${x}px, ${y}px)`;
   }
@@ -311,13 +324,13 @@
   // ---------- 领养与破壳 ----------
   function adopt() {
     const name = el.petName.value.trim() || '小团子';
-    state = G.create(name, selectedSpecies, Date.now());
+    state = G.create(name, selectedSpecies, Date.now(), selectedStyle);
     eggTaps = 0;
     builtKey = '';
     save();
     render();
     Sound.pop();
-    toast(`领养成功!${name} 还在蛋里哦`);
+    toast(PetSVG.hatchKind(state.species, state.style) === 'box' ? `领养成功!${name} 躲在纸箱里呢` : `领养成功!${name} 还在蛋里哦`);
   }
 
   async function tapEgg() {
@@ -660,6 +673,7 @@
     MiniGame.start({
       species: state.species,
       wearing: state.wearing,
+      style: state.style,
       onEnd(score) {
         mode = null;
         const r = G.finishGame(state, score);
@@ -695,7 +709,7 @@
 
   // ---------- 商店 ----------
   function renderShop() {
-    $$('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === shopTab));
+    $$('#panel-shop .tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === shopTab));
     const list = $('#shopList');
     list.innerHTML = '';
     const catalog = shopTab === 'food' ? G.FOODS : G.ITEMS;
@@ -758,6 +772,21 @@
     }
     after();
     renderShop();
+  }
+
+  // ---------- 画风 ----------
+  function switchStyle() {
+    if (!state || busy) return;
+    state.style = state.style === 'real' ? 'cute' : 'real';
+    render();
+    Sound.pop();
+    if (state.hatchedAt) {
+      bump('spin');
+      sparkles(6);
+      say(state.style === 'real' ? '换个样子~ 认得出我吗?' : '变回 Q 版啦!');
+    }
+    toast(`已切换到${G.STYLES[state.style]}画风`);
+    after();
   }
 
   // ---------- 面板与模式 ----------
@@ -923,6 +952,10 @@
   // ---------- 事件绑定 ----------
   function bind() {
     $('#adoptBtn').onclick = adopt;
+    for (const b of $$('#styleTabs button')) {
+      b.onclick = () => { selectedStyle = b.dataset.style; Sound.pop(); renderAdopt(); };
+    }
+    $('#styleBtn').onclick = switchStyle;
     el.petName.addEventListener('keydown', (e) => { if (e.key === 'Enter') adopt(); });
 
     el.scene.addEventListener('pointerdown', onScenePointerDown);
@@ -951,7 +984,7 @@
     $('#playBall').onclick = startBall;
     $('#playGame').onclick = startMinigame;
     $('#modeDone').onclick = () => (mode === 'bath' ? finishBath() : exitMode());
-    for (const t of $$('.tabs button')) {
+    for (const t of $$('#panel-shop .tabs button')) {
       t.onclick = () => { shopTab = t.dataset.tab; renderShop(); };
     }
 
@@ -961,6 +994,7 @@
       exitMode();
       closePanel();
       Store.save(null, { remote: true, now: true });
+      $('#styleBtn').hidden = true;
       render();
     };
 

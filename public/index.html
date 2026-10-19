@@ -13,6 +13,7 @@
     <header class="top">
       <h1>☁️ 云养宠物</h1>
       <div class="top-actions">
+        <button id="styleBtn" class="chip" hidden>🎨 写实</button>
         <button id="soundBtn" class="chip" aria-label="切换声音">🔊</button>
         <button id="accountBtn" class="chip" hidden>登录同步</button>
       </div>
@@ -23,6 +24,10 @@
       <div class="card adopt">
         <h2>领养一只小可爱</h2>
         <p class="muted">它会住在云端。你不在的时候,它也会饿、会困、会想你。</p>
+        <div id="styleTabs" class="tabs style-tabs">
+          <button data-style="cute" class="active">Q 版萌宠</button>
+          <button data-style="real">写实萌宠</button>
+        </div>
         <div id="speciesGrid" class="species-grid"></div>
         <input id="petName" maxlength="10" placeholder="给它起个名字吧" autocomplete="off" aria-label="宠物名字">
         <button id="adoptBtn" class="btn primary">领养它 🥚</button>
@@ -148,6 +153,7 @@
 
   <script src="js/game.js"></script>
   <script src="js/pet-svg.js"></script>
+  <script src="js/pet-real.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/minigame.js"></script>

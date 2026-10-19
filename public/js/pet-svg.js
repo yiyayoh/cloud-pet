@@ -156,7 +156,9 @@
       .join('');
   }
 
+  // style: 'cute'(Q 版,默认)或 'real'(写实,见 pet-real.js)
   function build(species, opts = {}) {
+    if (opts.style === 'real' && root.PetReal) return root.PetReal.build(species, opts);
     const c = PALETTE[species] || PALETTE.cat;
     const e = ears(species, c);
     const foot = BEAKED[species] ? c.inner : c.dark;
@@ -182,7 +184,8 @@
     </svg>`;
   }
 
-  function egg(species) {
+  function egg(species, style) {
+    if (style === 'real' && root.PetReal) return root.PetReal.egg(species);
     const c = PALETTE[species] || PALETTE.cat;
     const crack = `fill="none" stroke="${OUT}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"`;
     return `<svg class="egg-svg" viewBox="0 0 200 200" aria-hidden="true">
@@ -195,5 +198,10 @@
     </svg>`;
   }
 
-  root.PetSVG = { build, egg, PALETTE };
+  // 写实版是装在纸箱里送来的(鸟类还是蛋)
+  function hatchKind(species, style) {
+    return style === 'real' && !BEAKED[species] ? 'box' : 'egg';
+  }
+
+  root.PetSVG = { build, egg, hatchKind, PALETTE, parts: { ACCESSORIES, DIRT } };
 })(window);
