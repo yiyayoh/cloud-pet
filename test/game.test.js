@@ -120,11 +120,3 @@ test('normalize 补齐缺失字段、过滤未知道具', () => {
   assert.deepEqual(s.items, ['bow']);
   assert.equal(s.wearing.head, null);
 });
-
-test('画风:默认 Q 版,只接受已知画风', () => {
-  assert.equal(Game.create('a', 'cat', T0).style, 'cute');
-  assert.equal(Game.create('a', 'cat', T0, 'real').style, 'real');
-  assert.equal(Game.normalize({ name: 'a', species: 'cat' }).style, 'cute');
-  assert.equal(Game.normalize({ name: 'a', species: 'cat', style: 'real' }).style, 'real');
-  assert.equal(Game.normalize({ name: 'a', species: 'cat', style: 'pixel' }).style, 'cute');
-});

@@ -9,7 +9,7 @@
   ];
   const BAD = { icon: '🥦', bad: true };
 
-  function start({ species, wearing, style, onEnd }) {
+  function start({ species, wearing, onEnd }) {
     const overlay = document.getElementById('gameOverlay');
     const field = document.getElementById('mgField');
     const petEl = document.getElementById('mgPet');
@@ -18,7 +18,7 @@
     const timeEl = document.getElementById('mgTime');
     const endEl = document.getElementById('mgEnd');
 
-    petEl.innerHTML = PetSVG.build(species, { wearing, style });
+    petEl.innerHTML = PetSVG.build(species, { wearing });
     const svg = petEl.querySelector('svg');
     overlay.hidden = false;
     endEl.hidden = true;
