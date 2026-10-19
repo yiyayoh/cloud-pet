@@ -1,0 +1,14 @@
+{
+  "name": "cloud-pet",
+  "version": "0.2.0",
+  "description": "云养宠物:在浏览器里养一只会想你的小可爱",
+  "private": true,
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
