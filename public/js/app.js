@@ -695,7 +695,7 @@
 
   // ---------- 商店 ----------
   function renderShop() {
-    $$('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === shopTab));
+    $$('#panel-shop .tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === shopTab));
     const list = $('#shopList');
     list.innerHTML = '';
     const catalog = shopTab === 'food' ? G.FOODS : G.ITEMS;
@@ -951,7 +951,7 @@
     $('#playBall').onclick = startBall;
     $('#playGame').onclick = startMinigame;
     $('#modeDone').onclick = () => (mode === 'bath' ? finishBath() : exitMode());
-    for (const t of $$('.tabs button')) {
+    for (const t of $$('#panel-shop .tabs button')) {
       t.onclick = () => { shopTab = t.dataset.tab; renderShop(); };
     }
 
