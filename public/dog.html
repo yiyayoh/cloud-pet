@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>3D 小狗 · 云养宠物</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐶</text></svg>">
+  <link rel="stylesheet" href="css/dog.css">
+  <script type="importmap">{ "imports": { "three": "./vendor/three/three.module.min.js" } }</script>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div id="loading" class="loading">小狗正在跑过来……</div>
+
+  <header class="hud">
+    <div class="row">
+      <a href="./" class="chip" title="回到 Q 版">←</a>
+      <div class="who"><strong id="name">小白</strong> <span id="stage-name" class="tag"></span></div>
+      <div class="coins"><i class="coin-ico"></i><span id="coins">0</span></div>
+      <button id="btn-sound" class="chip" aria-label="切换声音">🔊</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>饱食</span><div class="bar"><i id="bar-hunger"></i></div></div>
+      <div class="stat"><span>心情</span><div class="bar"><i id="bar-happy"></i></div></div>
+      <div class="stat"><span>清洁</span><div class="bar"><i id="bar-clean"></i></div></div>
+      <div class="stat"><span>精力</span><div class="bar"><i id="bar-energy"></i></div></div>
+    </div>
+  </header>
+
+  <p class="hint">按住小狗来回摸摸 · 拖动空白处转动视角</p>
+
+  <div id="ballbar" class="ballbar" hidden>
+    <span>🎾 点一下地板把球扔出去</span>
+    <button id="ball-done" class="chip">不玩了</button>
+  </div>
+
+  <nav class="actions">
+    <button id="btn-feed"><span>🍖</span>喂饭</button>
+    <button id="btn-ball"><span>🎾</span>扔球</button>
+    <button id="btn-bath"><span>🛁</span>洗澡</button>
+    <button id="btn-sit"><span>🐕</span>坐下</button>
+    <button id="btn-paw"><span>🐾</span>握手</button>
+    <button id="btn-lie"><span>💤</span>趴下</button>
+    <button id="btn-sleep"><span>🌙</span>睡觉</button>
+  </nav>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <div id="welcome" class="welcome" hidden>
+    <form id="name-form" class="card">
+      <h2>一只小狗跑来了</h2>
+      <p>白白的、毛茸茸的,正歪着头看你。给它起个名字吧?</p>
+      <input id="name-input" maxlength="10" placeholder="小白" autocomplete="off">
+      <button class="primary">就叫这个</button>
+    </form>
+  </div>
+
+  <script src="js/game.js"></script>
+  <script src="js/sound.js"></script>
+  <script type="module" src="js/dog3d/main.js"></script>
+</body>
+</html>

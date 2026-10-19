@@ -2,6 +2,10 @@
 
 🎮 **在线试玩:https://yiyayoh.github.io/cloud-pet/**(纯前端版,宠物存在你的浏览器里)
 
+**新:🐶 3D 写实小狗** → https://yiyayoh.github.io/cloud-pet/dog.html
+一只白色、毛茸茸的串串小狗,用 three.js 实时渲染:骨骼动画 + 多层毛发(shell fur)+ 物理光照和柔和阴影。
+按住它来回摸会眯眼、歪头、猛摇尾巴;扔球它会追过去叼回来放在你脚边;会吃饭、洗澡(毛会被打湿塌下来,甩干后重新蓬起)、坐下、握手、趴下、自己挠痒痒、蜷成一团睡觉。拖动空白处可以转动视角。
+
 在浏览器里养一只软乎乎的小团子。它住在云端:你不在的时候,它也会饿、会困、会变脏、会想你;回来时它会跑过来跟你打招呼。
 
 ![8 种宠物](docs/pets.png)
@@ -53,6 +57,9 @@ public/
   js/minigame.js     接零食小游戏
   js/sound.js        WebAudio 合成音效
   js/storage.js      本地存档 + 云端同步
+  dog.html           3D 小狗页面
+  js/dog3d/          model.js 骨骼与毛发 · animator.js 姿势与程序动画 · main.js 互动与行为 · scene.js 场景灯光 · sfx.js 叫声
+  vendor/three/      three.js r170(MIT 协议)
 server/server.js     静态文件 + 账号 + 存档接口(纯 Node)
 test/                node:test 测试
 ```

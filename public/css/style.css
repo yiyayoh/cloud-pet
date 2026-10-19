@@ -51,6 +51,7 @@ input { -webkit-user-select: text; user-select: text; }
 .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .top h1 { font-size: 22px; margin: 0; }
 .top-actions { display: flex; gap: 6px; }
+.dog-link { text-decoration: none; display: inline-flex; align-items: center; background: linear-gradient(135deg, #FFE0CC, #FFF1C9); font-weight: 600; }
 .chip { border: none; background: var(--card); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; box-shadow: var(--shadow); }
 
 .btn { border: none; border-radius: 14px; padding: 12px 16px; font-size: 15px; cursor: pointer; background: var(--soft); color: var(--text); font-weight: 600; }
