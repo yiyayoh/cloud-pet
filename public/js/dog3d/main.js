@@ -13,7 +13,7 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
 const canvas = $('#stage');
 const isMobile = matchMedia('(pointer: coarse)').matches;
-const { renderer, scene, camera, controls, lights } = createScene(canvas);
+const { renderer, scene, camera, controls, lights, resize: sceneResize } = createScene(canvas);
 const dog = buildDog({ layers: isMobile ? 22 : 32 });
 scene.add(dog.group);
 const anim = new Animator(dog);
@@ -69,11 +69,43 @@ const bowl = new THREE.Group();
 bowl.position.set(-0.75, 0, 0.35);
 scene.add(bowl);
 
+// 身体下面一块柔和的接触阴影,让小狗"站"在地上
+const contact = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(40,25,15,.55)');
+  grd.addColorStop(0.5, 'rgba(40,25,15,.22)');
+  grd.addColorStop(1, 'rgba(40,25,15,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 128, 128);
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }),
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.renderOrder = 1;
+  scene.add(m);
+  return m;
+})();
+const lowPoses = { sit: 0.6, paw: 0.6, scratch: 0.6, lie: 1, sleep: 1 };
+let contactK = 0;
+function updateContactShadow() {
+  const g = dog.group;
+  contactK += ((lowPoses[anim.pose] || 0) - contactK) * 0.1;
+  contact.position.set(g.position.x, 0.004, g.position.z);
+  contact.rotation.z = g.rotation.y;
+  const s = g.scale.x;
+  contact.scale.set((0.42 + 0.12 * contactK) * s, (0.78 + 0.1 * contactK) * s, 1);
+  contact.material.opacity = 0.55 + 0.35 * contactK;
+}
+
 // 泡泡和水珠
 const fxGroup = new THREE.Group();
 scene.add(fxGroup);
 const foamMat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.3, transparent: true, opacity: 0.92 });
-const dropMat = new THREE.MeshPhysicalMaterial({ color: '#DDEFFF', roughness: 0.05, transmission: 0.6, transparent: true, opacity: 0.8 });
+const dropMat = new THREE.MeshPhysicalMaterial({ color: '#DDEFFF', roughness: 0.05, clearcoat: 1, transparent: true, opacity: 0.7 });
 const particles = [];
 
 // ---------- 行为调度 ----------
@@ -145,19 +177,21 @@ function updateMove(dt) {
     anim.v.walk = Math.max(0, anim.v.walk - dt * 4);
     return;
   }
-  if (dist <= move.stop) {
+  if (dist <= move.stop + 0.015) {
     const m = move;
     move = null;
     m.resolve();
     return;
   }
-  const align = Math.max(0, Math.cos(diff));
-  const step = Math.min(dist - move.stop, move.speed * align * dt);
+  // 快到了就放慢,没对准方向就先转身,不然会绕着目标打转
+  const align = Math.max(0, Math.cos(diff)) ** 2;
+  const arrive = THREE.MathUtils.clamp((dist - move.stop) / 0.3, 0.2, 1);
+  const step = Math.min(dist - move.stop, move.speed * align * arrive * dt);
   p.x += Math.sin(heading()) * step;
   p.z += Math.cos(heading()) * step;
   p.x = THREE.MathUtils.clamp(p.x, -1.6, 1.6);
   p.z = THREE.MathUtils.clamp(p.z, -1.4, 1.2);
-  anim.v.walk = THREE.MathUtils.lerp(anim.v.walk, (move.speed / 0.7) * Math.max(0.3, align), 1 - Math.exp(-8 * dt));
+  anim.v.walk = THREE.MathUtils.lerp(anim.v.walk, (move.speed / 0.7) * Math.max(0.3, align * arrive), 1 - Math.exp(-8 * dt));
 }
 
 // 镜头前方的地面位置(狗把球叼回来的地方)。出发时算好就固定,不跟着镜头变
@@ -321,9 +355,13 @@ function onPet(dx) {
 function startPetting(e, part) {
   controls.enabled = false;
   petting = { part, dist: 0, last: 0, x: e.clientX, y: e.clientY, t0: performance.now(), moved: 0 };
+  if (lastHit) pressFur(lastHit.point);
   if (state.sleeping || busy) return;
-  if (task && !['sit', 'lie', 'paw', 'pet'].includes(task.name)) run('pet', async () => {});
-  else if (!task) run('pet', async () => {});
+  // 正在走动、闻东西之类的就停下来让你摸;坐着、趴着就保持姿势
+  if (task && !['sit', 'lie', 'paw'].includes(task.name)) {
+    task.cancel = true;
+    task = null;
+  }
   anim.set('eyes', 0.3);
   anim.set('tilt', part === 'head' ? rand(-0.35, 0.35) : 0.12);
   anim.set('lean', part === 'head' ? 0 : 0.1);
@@ -333,6 +371,7 @@ function startPetting(e, part) {
 
 function endPetting() {
   controls.enabled = true;
+  handOn = false;
   if (!petting) return;
   const tap = petting.moved < 10 && performance.now() - petting.t0 < 350;
   petting = null;
@@ -568,6 +607,16 @@ function doBath() {
 function updateParticles(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
+    if (p.ripple) {
+      p.life -= dt;
+      p.ripple.scale.setScalar(1 + (0.6 - p.life) * 5);
+      p.ripple.material.opacity = Math.max(0, p.life / 0.6) * 0.7;
+      if (p.life <= 0) {
+        p.ripple.removeFromParent();
+        particles.splice(i, 1);
+      }
+      continue;
+    }
     p.v.y -= 9.8 * dt;
     p.m.position.addScaledVector(p.v, dt);
     p.life -= dt;
@@ -638,7 +687,9 @@ async function goToSleep(t) {
 // ---------- 自己玩 ----------
 function idle() {
   setTimeout(idle, rand(4500, 8500));
-  if (!state || task || petting || busy || state.sleeping || document.hidden) return;
+  if (!state || task || petting || busy || ballMode || state.sleeping || document.hidden) return;
+  // 刚跟它互动过,就乖乖待着看你,不马上自己跑开
+  if (performance.now() - lastInteract < 9000) return;
   const m = G.mood(state);
   const r = Math.random();
   if (m.need && r < 0.5) {
@@ -692,14 +743,39 @@ function setRay(e) {
   raycaster.setFromCamera(ndc, camera);
 }
 
+let lastHit = null;
 function hitDog(e) {
   setRay(e);
   const hits = raycaster.intersectObjects(dog.hit, false);
-  return hits[0]?.object.userData.part || null;
+  lastHit = hits[0] || null;
+  return lastHit?.object.userData.part || null;
+}
+
+// 手摸到的位置传给毛发着色器,毛会顺着手被压下去
+const handLocal = new THREE.Vector3();
+const handPrev = new THREE.Vector3();
+let handOn = false;
+function pressFur(point) {
+  dog.base.updateMatrixWorld();
+  handLocal.copy(point);
+  dog.base.worldToLocal(handLocal);
+  // 手按在毛的表面,往身体里收一点
+  const u = dog.uniforms;
+  if (handOn) {
+    const dir = handLocal.clone().sub(handPrev);
+    if (dir.lengthSq() > 1e-6) u.uHandDir.value.lerp(dir.normalize(), 0.5).normalize();
+  }
+  handPrev.copy(handLocal);
+  u.uHand.value.x = handLocal.x;
+  u.uHand.value.y = handLocal.y;
+  u.uHand.value.z = handLocal.z;
+  handOn = true;
 }
 
 let downAt = null;
+let lastInteract = 0;
 window.addEventListener('pointerdown', (e) => {
+  lastInteract = performance.now();
   if (e.target !== canvas || !state) return;
   sfx.unlock();
   const part = hitDog(e);
@@ -716,7 +792,12 @@ window.addEventListener('pointermove', (e) => {
     petting.moved += d;
     petting.x = e.clientX;
     petting.y = e.clientY;
-    if (hitDog(e)) onPet(d);
+    if (hitDog(e)) {
+      pressFur(lastHit.point);
+      onPet(d);
+    } else {
+      handOn = false;
+    }
   } else if (!task && !state?.sleeping) {
     // 不忙的时候,眼睛跟着手指/鼠标
     setRay(e);
@@ -735,16 +816,43 @@ window.addEventListener('pointerup', (e) => {
   if (!downAt) return;
   const tap = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 8 && performance.now() - downAt.t < 400;
   downAt = null;
-  if (tap && ballMode && e.target === canvas) {
-    setRay(e);
-    const p = new THREE.Vector3();
-    if (raycaster.ray.intersectPlane(floorPlane, p)) {
-      p.x = THREE.MathUtils.clamp(p.x, -1.2, 1.2);
-      p.z = THREE.MathUtils.clamp(p.z, -1.0, 0.85);
-      throwBall(p);
-    }
-  }
+  if (!tap || e.target !== canvas) return;
+  setRay(e);
+  const p = new THREE.Vector3();
+  if (!raycaster.ray.intersectPlane(floorPlane, p)) return;
+  p.x = THREE.MathUtils.clamp(p.x, -1.2, 1.2);
+  p.z = THREE.MathUtils.clamp(p.z, -1.0, 0.85);
+  if (ballMode) throwBall(p);
+  else callTo(p);
 });
+
+// 点地板:它会跑过去,在那儿坐下看着你
+function callTo(p) {
+  if (!state || state.sleeping || busy) return;
+  spawnRipple(p);
+  run('call', async (t) => {
+    await standUp(t);
+    happy(0.9);
+    anim.set('ears', 0.7);
+    anim.lookAt.set(p.x, 0.2, p.z);
+    anim.set('look', 0.5);
+    await moveTo(p, 0.8, 0.05, t);
+    lookAtCamera();
+    await faceTowards(camera.position, t);
+    anim.setPose('sit');
+    await wait(700, t);
+    calm();
+  });
+}
+
+const rippleMat = new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0.7, depthWrite: false });
+function spawnRipple(p) {
+  const r = new THREE.Mesh(new THREE.RingGeometry(0.03, 0.045, 32), rippleMat.clone());
+  r.rotation.x = -Math.PI / 2;
+  r.position.set(p.x, 0.006, p.z);
+  scene.add(r);
+  particles.push({ ripple: r, life: 0.6 });
+}
 window.addEventListener('pointercancel', () => { if (petting) endPetting(); downAt = null; });
 
 // ---------- 界面 ----------
@@ -833,10 +941,45 @@ function bindUi() {
 // ---------- 主循环 ----------
 const clock = new THREE.Clock();
 function frame() {
-  step(Math.min(0.05, clock.getDelta()), clock.elapsedTime);
+  const raw = clock.getDelta();
+  step(Math.min(0.05, raw), clock.elapsedTime);
   controls.update();
   renderer.render(scene, camera);
+  watchPerf(raw);
 }
+
+// 手机上太卡就自动降低毛发层数和分辨率
+let quality = 2;
+const perf = { frames: 0, time: 0, skip: 30 };
+function setQuality(q) {
+  quality = q;
+  const keepEvery = q === 2 ? 1 : q === 1 ? 2 : 3;
+  dog.shells.forEach((s, i) => { s.visible = (i + 1) % keepEvery === 0 || i === dog.shells.length - 1; });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, q === 2 ? 2 : q === 1 ? 1.5 : 1));
+  sceneResize();
+}
+function watchPerf(dt) {
+  if (quality === 0 || document.hidden) return;
+  if (perf.skip > 0) { perf.skip--; return; }
+  perf.frames++;
+  perf.time += dt;
+  if (perf.frames < 90) return;
+  const avg = perf.time / perf.frames;
+  perf.frames = 0;
+  perf.time = 0;
+  perf.skip = 30;
+  if (avg > 1 / 38) setQuality(quality - 1);
+}
+
+// 切到后台就不画了,省电
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    renderer.setAnimationLoop(null);
+  } else {
+    clock.getDelta();
+    renderer.setAnimationLoop(frame);
+  }
+});
 
 // 镜头跟着小狗走,手机竖屏也不会跑出画面
 const camGoal = new THREE.Vector3();
@@ -854,6 +997,9 @@ function followDog(dt) {
 
 function step(dt, t) {
   followDog(dt);
+  const hand = dog.uniforms.uHand.value;
+  hand.w += ((handOn ? 1 : 0) - hand.w) * (1 - Math.exp(-(handOn ? 14 : 3) * dt));
+  updateContactShadow();
   updateMove(dt);
   updateBall(dt);
   updateParticles(dt);

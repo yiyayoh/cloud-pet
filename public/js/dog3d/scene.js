@@ -135,5 +135,5 @@ export function createScene(canvas) {
   resize();
   window.addEventListener('resize', resize);
 
-  return { renderer, scene, camera, controls, lights: { hemi, sun, rim }, floor };
+  return { renderer, scene, camera, controls, lights: { hemi, sun, rim }, floor, resize };
 }
