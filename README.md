@@ -64,6 +64,10 @@ server/server.js     静态文件 + 账号 + 存档接口(纯 Node)
 test/                node:test 测试
 ```
 
+## 交接
+
+继续开发前请先读 [docs/HANDOFF.md](docs/HANDOFF.md):项目背景、用户需求、架构、调试方法、已知问题和下一步建议都在里面。
+
 ## 后续计划
 
 - [ ] 部署上线(需要一台能跑 Node 的服务器,或改用托管数据库)
