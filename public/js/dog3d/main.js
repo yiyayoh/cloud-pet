@@ -113,30 +113,69 @@ const CANCEL = Symbol('cancel');
 let task = null;
 let busy = false;
 
-function run(name, fn) {
-  if (task) task.cancel = true;
-  const t = { name, cancel: false };
+function cleanupTask(t) {
+  // 取消时先同步清理,旧任务稍后的 finally 不能再碰新任务的状态。
+  for (const cleanup of t.cleanups.splice(0)) cleanup();
+}
+
+function run(name, fn, { lock = false } = {}) {
+  if (task) {
+    const old = task;
+    old.cancel = true;
+    old.abort.abort();
+    if (move?.t === old) {
+      const pending = move;
+      move = null;
+      pending.reject(CANCEL);
+    }
+    cleanupTask(old);
+  }
+  const t = { name, cancel: false, abort: new AbortController(), cleanups: [] };
   task = t;
+  busy = lock;
   anim.scratching = false;
   anim.chew = false;
-  return fn(t)
+  anim.shake = 0;
+  calm();
+  renderHud();
+  return Promise.resolve().then(() => {
+    if (t.cancel) throw CANCEL;
+    return fn(t);
+  })
     .catch((e) => { if (e !== CANCEL) console.error(e); })
-    .finally(() => { if (task === t) task = null; });
+    .finally(() => {
+      cleanupTask(t);
+      if (task === t) {
+        task = null;
+        busy = false;
+        renderHud();
+      }
+    });
 }
 
 function wait(ms, t) {
-  return new Promise((res, rej) => setTimeout(() => (t?.cancel ? rej(CANCEL) : res()), ms));
+  return new Promise((res, rej) => {
+    if (t?.cancel) return rej(CANCEL);
+    const cancel = () => { clearTimeout(timer); rej(CANCEL); };
+    const timer = setTimeout(() => {
+      t?.abort.signal.removeEventListener('abort', cancel);
+      res();
+    }, ms);
+    t?.abort.signal.addEventListener('abort', cancel, { once: true });
+  });
 }
 
 let move = null; // { target: fn -> Vector3, speed, stop, resolve, reject, t }
 function moveTo(getTarget, speed, stop, t) {
   return new Promise((resolve, reject) => {
+    if (t?.cancel) return reject(CANCEL);
     move = { getTarget: typeof getTarget === 'function' ? getTarget : () => getTarget, speed, stop, resolve, reject, t };
   });
 }
 
 function faceTowards(point, t) {
   return new Promise((resolve, reject) => {
+    if (t?.cancel) return reject(CANCEL);
     move = { faceOnly: true, getTarget: () => point, resolve, reject, t, speed: 0, stop: 0 };
   });
 }
@@ -341,7 +380,7 @@ function doComeHere() {
 let petting = null;
 
 function onPet(dx) {
-  if (state.sleeping) return;
+  if (state.sleeping || busy) return;
   petting.dist += dx;
   if (petting.dist - petting.last < 70) return;
   petting.last = petting.dist;
@@ -359,8 +398,7 @@ function startPetting(e, part) {
   if (state.sleeping || busy) return;
   // 正在走动、闻东西之类的就停下来让你摸;坐着、趴着就保持姿势
   if (task && !['sit', 'lie', 'paw'].includes(task.name)) {
-    task.cancel = true;
-    task = null;
+    run('pet', async () => {});
   }
   anim.set('eyes', 0.3);
   anim.set('tilt', part === 'head' ? rand(-0.35, 0.35) : 0.12);
@@ -379,6 +417,7 @@ function endPetting() {
     if (tap) toast(pick(['它睡得正香,打了个小呼噜', '嘘……它翻了个身继续睡']));
     return;
   }
+  if (busy) return;
   if (tap) {
     calm();
     const r = Math.random();
@@ -394,8 +433,10 @@ function endPetting() {
 function doFeed() {
   if (state.sleeping) return toast('它在睡觉呢');
   return run('feed', async (t) => {
-    busy = true;
-    try {
+    t.cleanups.push(() => {
+      bowl.userData.food.visible = false;
+      anim.chew = false;
+    });
       bowl.userData.food.visible = true;
       sfx.kibble();
       await standUp(t);
@@ -437,11 +478,7 @@ function doFeed() {
       toast(pick(['吃得干干净净!', '舔了舔嘴巴,心满意足']));
       await wait(1200, t);
       calm();
-    } finally {
-      anim.chew = false;
-      busy = false;
-    }
-  });
+  }, { lock: true });
 }
 
 // ---------- 扔球 ----------
@@ -459,7 +496,7 @@ function throwBall(point) {
   ballVel.y = (point.y + 0.036 - start.y + 0.5 * 9.8 * T * T) / T;
   ballMoving = true;
   sfx.squeak();
-  fetch();
+  fetchBall();
 }
 
 function updateBall(dt) {
@@ -493,10 +530,16 @@ function updateBall(dt) {
   }
 }
 
-function fetch() {
+function fetchBall() {
   return run('fetch', async (t) => {
-    busy = true;
-    try {
+    t.cleanups.push(() => {
+      if (ball.parent !== scene) {
+        scene.attach(ball);
+        ballVel.set(0, 0, 0);
+        ballMoving = true;
+      }
+      anim.pant = false;
+    });
       anim.set('ears', 0.9);
       happy(1.4);
       anim.lookAt.copy(ball.position);
@@ -542,11 +585,7 @@ function fetch() {
       after(G.playBall(state));
       await wait(1800, t);
       calm();
-    } finally {
-      busy = false;
-      anim.pant = false;
-    }
-  });
+  }, { lock: true });
 }
 
 // ---------- 洗澡 ----------
@@ -554,8 +593,25 @@ function doBath() {
   if (state.sleeping) return toast('它在睡觉呢');
   if (state.stats.clean >= 99) return toast('它已经香喷喷的了');
   return run('bath', async (t) => {
-    busy = true;
-    try {
+    const wet = dog.uniforms.uWet;
+    const foam = [];
+    const clearFoam = () => {
+      for (const m of foam.splice(0)) {
+        m.removeFromParent();
+        m.geometry.dispose();
+      }
+    };
+    t.cleanups.push(() => {
+      clearFoam();
+      wet.value = 0;
+      anim.shake = 0;
+      for (let i = particles.length - 1; i >= 0; i--) {
+        if (particles[i].owner !== t) continue;
+        particles[i].m.removeFromParent();
+        particles[i].m.geometry.dispose();
+        particles.splice(i, 1);
+      }
+    });
       await standUp(t);
       await faceTowards(camera.position, t);
       anim.set('ears', -0.5);
@@ -563,9 +619,7 @@ function doBath() {
       anim.set('eyes', 0.4);
       sfx.splash();
       // 毛被打湿、塌下来
-      const wet = dog.uniforms.uWet;
       for (let i = 0; i < 20; i++) { wet.value = Math.min(1, wet.value + 0.05); await wait(40, t); }
-      const foam = [];
       for (let i = 0; i < 46; i++) {
         const bone = pick(['spine', 'chest', 'root', 'neck', 'head']);
         const m = new THREE.Mesh(new THREE.SphereGeometry(rand(0.012, 0.03), 10, 8), foamMat);
@@ -578,7 +632,7 @@ function doBath() {
       }
       while (state.stats.clean < 100) G.scrub(state);
       await wait(900, t);
-      for (const m of foam) m.removeFromParent();
+      clearFoam();
       toast('冲干净啦,它要甩水了!');
       await wait(300, t);
       anim.shake = 1.4;
@@ -589,7 +643,7 @@ function doBath() {
         const d = new THREE.Mesh(new THREE.SphereGeometry(rand(0.004, 0.009), 6, 4), dropMat);
         d.position.copy(origin).add(new THREE.Vector3(rand(-0.15, 0.15), rand(0, 0.2), rand(-0.2, 0.2)));
         fxGroup.add(d);
-        particles.push({ m: d, v: new THREE.Vector3(rand(-2, 2), rand(0.5, 2.2), rand(-2, 2)), life: 1.2 });
+        particles.push({ m: d, v: new THREE.Vector3(rand(-2, 2), rand(0.5, 2.2), rand(-2, 2)), life: 1.2, owner: t });
       }
       for (let i = 0; i < 30; i++) { wet.value = Math.max(0.15, wet.value - 0.03); await wait(50, t); }
       anim.set('eyes', 1);
@@ -598,10 +652,7 @@ function doBath() {
       after();
       for (let i = 0; i < 30; i++) { wet.value = Math.max(0, wet.value - 0.01); await wait(80, t); }
       calm();
-    } finally {
-      busy = false;
-    }
-  });
+  }, { lock: true });
 }
 
 function updateParticles(dt) {
@@ -622,6 +673,7 @@ function updateParticles(dt) {
     p.life -= dt;
     if (p.m.position.y < 0.005 || p.life <= 0) {
       p.m.removeFromParent();
+      p.m.geometry.dispose();
       particles.splice(i, 1);
     }
   }
@@ -893,7 +945,7 @@ function renderHud() {
   }
   $('#btn-sleep').innerHTML = state.sleeping ? '<span>☀️</span>叫醒' : '<span>🌙</span>睡觉';
   for (const b of document.querySelectorAll('.actions button')) {
-    if (b.id !== 'btn-sleep') b.disabled = state.sleeping;
+    b.disabled = busy || (state.sleeping && b.id !== 'btn-sleep');
   }
   dog.uniforms.uDirt.value = state.stats.clean < 60 ? (60 - state.stats.clean) / 60 : 0;
   const st = G.stage(state);
@@ -931,10 +983,12 @@ function bindUi() {
     const now = Date.now();
     state = G.create(name, 'dog', now);
     G.hatch(state, now);
+    const claimed = G.claimDaily(state, now);
     $('#welcome').hidden = true;
     save();
     renderHud();
     run('hello', async (t) => { await wait(300, t); happy(1.4); lookAtCamera(); await bark(t, 2); calm(); });
+    if (claimed) setTimeout(() => toast(`每日签到 +${claimed} 金币`), 1800);
   });
 }
 
