@@ -97,10 +97,25 @@ const ballInfo = (page) => page.evaluate(() => {
     await page.waitForTimeout(100);
     assert.equal(await page.locator('#btn-sit').isDisabled(), true);
     assert.equal(await foamCount(page), 0);
+    await page.waitForFunction(() => __anim.chew);
+    const feeding = await page.evaluate(() => {
+      const p = __dog.mouthPoint.getWorldPosition(__dog.group.position.clone());
+      return { y: p.y, distance: Math.hypot(p.x + 0.75, p.z - 0.35) };
+    });
+    assert.ok(feeding.y >= 0.035 && feeding.y <= 0.095, JSON.stringify(feeding));
+    assert.ok(feeding.distance < 0.085, JSON.stringify(feeding));
+    passed('成年狗进食时嘴部能够贴近碗内食物');
     await idle(page);
     assert.ok(await page.evaluate(() => __api.state.stats.hunger > 79));
     assert.equal(await page.locator('#btn-sit').isDisabled(), false);
     passed('新喂饭任务不会被旧洗澡任务的 finally 解锁或干扰');
+
+    await page.locator('#btn-bath').click();
+    await idle(page);
+    assert.ok(await page.evaluate(() => __api.state.stats.clean > 99.9));
+    assert.equal(await foamCount(page), 0);
+    assert.equal(await page.evaluate(() => __dog.uniforms.uWet.value), 0);
+    passed('正常洗澡完成后清洁值、泡泡和干燥状态正确');
 
     await page.locator('#btn-ball').click();
     await idle(page);
@@ -124,6 +139,15 @@ const ballInfo = (page) => page.evaluate(() => {
     assert.ok(after.happy > before.happy + 9.8);
     assert.equal((await ballInfo(page)).attached, false);
     passed('正常捡球可以返回、放下球并结算奖励');
+    await page.locator('#ball-done').click();
+    await page.locator('#btn-sleep').click();
+    await idle(page);
+    assert.equal(await page.evaluate(() => __api.state.sleeping && document.body.classList.contains('night')), true);
+    await page.locator('#btn-sleep').click();
+    await idle(page);
+    assert.equal(await page.evaluate(() => __api.state.sleeping || document.body.classList.contains('night')), false);
+    assert.equal(await page.locator('#btn-feed').isDisabled(), false);
+    passed('正常睡觉、叫醒和按钮解锁不受动作保护影响');
     assert.equal(await page.evaluate(() => localStorage.getItem('cloud-pet:v2')), 'Q版存档保持原样');
     assert.deepEqual(errors, []);
     await context.close();
@@ -132,12 +156,55 @@ const ballInfo = (page) => page.evaluate(() => {
     await first.page.locator('#name-input').fill('新来的小狗');
     await first.page.locator('#name-form button').tap();
     assert.equal(await first.page.evaluate(() => __api.state.coins), 50);
+    const targets = await first.page.locator('.actions button').evaluateAll((bs) => bs.map((b) => {
+      const r = b.getBoundingClientRect();
+      return { width: r.width, height: r.height, bottom: r.bottom };
+    }));
+    assert.ok(targets.every((r) => r.width >= 44 && r.height >= 44 && r.bottom <= 568));
+    passed('320 像素窄屏所有按钮的可点区域至少 44×44');
+    await idle(first.page);
+    await first.page.locator('#btn-feed').tap();
+    await first.page.waitForFunction(() => __anim.chew);
+    const babyFeeding = await first.page.evaluate(() => {
+      const p = __dog.mouthPoint.getWorldPosition(__dog.group.position.clone());
+      return { y: p.y, distance: Math.hypot(p.x + 0.75, p.z - 0.35) };
+    });
+    assert.ok(babyFeeding.y >= 0.025 && babyFeeding.y <= 0.095, JSON.stringify(babyFeeding));
+    assert.ok(babyFeeding.distance < 0.085, JSON.stringify(babyFeeding));
+    await idle(first.page);
+    passed('幼崽进食也能贴近饭碗');
     await first.page.reload();
     await first.page.waitForFunction(() => window.__api);
     assert.equal(await first.page.evaluate(() => __api.state.coins), 50);
     passed('首次领养立即签到,刷新不重复领取');
     assert.deepEqual(first.errors, []);
     await first.context.close();
+
+    const narrow = await openDog(browser, { mobile: true });
+    await narrow.page.locator('#btn-ball').tap();
+    await idle(narrow.page);
+    await narrow.page.evaluate(() => {
+      window.__checkFraming = [];
+      window.__checkFrameTimer = setInterval(() => {
+        if (__api.task !== 'fetch') return;
+        const p = __dog.nose.getWorldPosition(__dog.group.position.clone()).project(__three.camera);
+        window.__checkFraming.push({ x: p.x, y: p.y });
+      }, 16);
+    });
+    for (const x of [40, 280]) {
+      await narrow.page.touchscreen.tap(x, 410);
+      await narrow.page.waitForFunction(() => __api.task === 'fetch');
+      await idle(narrow.page);
+    }
+    const framing = await narrow.page.evaluate(() => {
+      clearInterval(window.__checkFrameTimer);
+      return window.__checkFraming;
+    });
+    assert.ok(framing.length > 30);
+    assert.ok(framing.every((p) => Math.abs(p.x) < 1 && Math.abs(p.y) < 1));
+    assert.deepEqual(narrow.errors, []);
+    passed('320 像素窄屏左右追球过程中口鼻保持在画面内');
+    await narrow.context.close();
     console.log(`3D 回归完成: ${checks} 项通过`);
   } finally {
     await browser.close();

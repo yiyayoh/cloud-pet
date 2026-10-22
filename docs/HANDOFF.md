@@ -1,7 +1,7 @@
 # 云养宠物 · 项目交接文档
 
 > 写给接手继续开发的 AI 助手或开发者。读完这一篇就能接着干,不需要翻聊天记录。
-> 最后更新:2026-10-21,对应提交 `f4dfab3` 之后。
+> 最后更新:2026-10-23,小狗互动修复与第一轮脸部调整后。
 
 ---
 
@@ -110,6 +110,7 @@ docs/                            README 用的截图、本文档
 - `parts()`:每个部件 = 几何体 + 骨头名 + 毛长系数 + 颜色 + 毛的倒向(`comb`)。改体型主要改这里和 `JOINTS`。
 - **毛发是 shell fur(多层壳)**:同一个几何体画 N 层(电脑 32 层,手机 22 层),每层沿法线外推一点,片元着色器按 3D 网格哈希决定哪里是「毛」、哪里丢弃。全部材质共享一个 shader 程序(`customProgramCacheKey`)。
   - 顶点属性:`aFur`(毛长系数,眼鼻嘴周围很短,眉毛胡子更长,见 `furMask`)、`aComb`(毛倒伏方向,会随骨骼一起转)、`color`。
+  - 第一轮脸部调整缩小了眼睛、拉长口鼻、减轻圆头感,耳朵改得更浅、略不对称;只调整程序模型,没有引入外部素材。`dog.carryPoint` 是叼球在下颌骨骼内的位置,`dog.mouthPoint` 是检查进食接触的定位点,后续改嘴长时要一起核对。
   - 共享 uniform(`dog.uniforms`):`uLen` 毛长、`uDensity` 毛密度、`uTime` 微风、`uWet` 打湿程度(洗澡时 0→1,毛塌下来变暗)、`uDirt` 脏污、`uRim` 逆光透亮、`uHand`(xyz=手在模型局部坐标的位置,w=力度)和 `uHandDir`(摸摸时把毛压倒)。
   - 着色器是通过 `onBeforeCompile` 往 `MeshStandardMaterial` 里注入的,注入点:`#include <skinning_vertex>`、`#include <color_fragment>`、`#include <emissivemap_fragment>`。**升级 three.js 时这几个 chunk 名可能变,要检查。**
 - 不长毛的部件挂在骨头上:眼睛(虹膜+瞳孔+角膜+深色眼眶,`dog.eyes` 是 Group,眨眼就是缩放 y)、鼻子(皮革凹凸贴图+鼻孔)、嘴巴线和人中、口腔、舌头(`dog.tongue`)。
@@ -117,7 +118,7 @@ docs/                            README 用的截图、本文档
 
 ### 6.2 动画 `animator.js`
 
-- `POSES`:每个姿势是「相对站姿的骨骼旋转 + 身体下沉量」。现有 `stand sit paw(握手) scratch(后腿挠痒) lie sleep`。`anim.setPose(name)` 后会平滑过渡。
+- `POSES`:每个姿势是「相对站姿的骨骼旋转 + 身体下沉量」。现有 `stand feed(进食时弯腿俯身) sit paw(握手) scratch(后腿挠痒) lie sleep`。`anim.setPose(name)` 后会平滑过渡。
 - 在姿势之上叠加程序动画,参数都在 `anim.v`,用 `anim.set(key, 目标值)` 平滑变化:
   `wag/wagFreq` 摇尾、`jaw` 张嘴、`tongue` 吐舌、`eyes` 睁眼程度(眯眼=0.3)、`ears` 耳朵竖起(负数=往后贴)、`tilt` 歪头、`headDown` 低头、`look` 看向 `anim.lookAt` 的权重、`lean` 身体侧倾。
 - 开关型:`anim.pant` 哈气、`anim.chew` 咀嚼、`anim.scratching` 挠痒抖腿、`anim.shake = 秒数` 甩水。
@@ -125,15 +126,15 @@ docs/                            README 用的截图、本文档
 
 ### 6.3 行为与互动 `main.js`
 
-- **行为调度**:`run(name, async (t) => {...})` 启动一个行为,会取消上一个。行为里用 `await wait(ms, t)`、`await moveTo(target, speed, stopDist, t)`、`await faceTowards(point, t)`;取消时这些会抛出 `CANCEL`。`task` 是当前行为,`busy` 表示正在进行不能打断的动作(吃饭、洗澡、捡球)。
+- **行为调度**:`run(name, async (t) => {...}, { lock: true })` 启动一个行为,会取消上一个。行为里用 `await wait(ms, t)`、`await moveTo(target, speed, stopDist, t)`、`await faceTowards(point, t)`;取消时这些会抛出 `CANCEL`。`task` 是当前行为,`lock` 控制 `busy`(吃饭、洗澡、捡球时禁用动作按钮,轻点狗不会启动新动作)。资源收尾注册在 `t.cleanups`,取消时同步执行且仅执行一次;旧任务的异步 `finally` 不能重置新任务的动画或忙碌状态。移动和计时等待会在取消时立即拒绝,不能用覆盖 `move` 的方式遗忘旧 Promise。
 - `moveTo` 的目标可以是函数(每帧重新取,用来追滚动的球)。到达判定有 1.5cm 容差,靠近时会减速——**这两点是修过的 bug,别删**(否则会绕着目标打转或永远到不了)。
 - 现有行为:`doSit doLie doPaw doScratch doFeed doBath doSleep fetch(扔球捡回) callTo(点地板叫过来) doSniffAround doWander doComeHere`;`idle()` 每 4.5–8.5 秒随机挑一个自主行为(饿了会去饭碗边等、脏了会挠痒、困了会趴下),**刚互动过 9 秒内不会自己跑开**。
 - 指针:在 `window` 上用**捕获阶段**监听 `pointerdown`,这样能抢在 OrbitControls 之前判断点到的是不是狗。点到狗 → 摸摸(拖动)或戳一下(短按);点到地板 → 扔球模式下扔球,否则叫它过来;拖空白处 → 旋转视角。
-- 镜头会跟着狗平移(`followDog`),否则手机竖屏时狗会跑出画面。因此 `homePoint()` 要在出发时算一次并固定,不能每帧重算。
+- 镜头会跟着狗平移(`followDog`),奔跑时跟得更快且略向头部偏移,避免竖屏追球时口鼻出屏。因此 `homePoint()` 要在出发时算一次并固定,不能每帧重算。
 - 性能:`watchPerf` 发现平均低于约 38fps 就逐级降低毛发层数和像素比;切后台暂停渲染。
 - 夜晚:`setNight(true)` 调暗灯光和曝光,界面切深色。
 - **调试钩子**(截图脚本靠它们):`window.__dog`(模型)、`window.__anim`、`window.__three`(scene/camera/controls/renderer)、`window.__api`(`step(dt,t)` 手动推进一帧逻辑,以及各个 `doXxx`、`throwBall`、`state`、`task`)。
-- 注意:`main.js` 里有个函数叫 `fetch()`(捡球),在模块作用域里遮住了全局 `fetch`。在这个文件里要发网络请求请用 `window.fetch`,或者顺手把它改名成 `fetchBall`。
+- 捡球行为函数现名 `fetchBall()`;不再遮住浏览器的全局 `fetch`。
 
 ### 6.4 界面 `dog.html` / `dog.css`
 
@@ -164,6 +165,16 @@ node tools/snapshot-dog.cjs eat.png --action doFeed --ms 3000   # 跑 3 秒喂�
 
 每次改模型/动画/行为,都应该截图自己看一眼再交给用户。改规则就跑 `npm test`。
 
+新增 3D 浏览器回归工具(同样依赖 Playwright,不连续渲染):
+
+```bash
+node tools/check-dog.cjs http://localhost:3124/dog.html
+```
+
+共 12 项检查,覆盖忙碌保护、强制取消后的泡泡/湿毛/球清理、旧任务与新任务的竞争、正常洗澡/捡球/睡醒、成年与幼崽的进食接触、首次签到与刷新不重复领取、320 像素触控区域和左右追球镜头。可设置 `BROWSER_PATH` 为本机 Chrome 的可执行文件路径,否则使用 Playwright 下载的 Chromium。测试用隔离浏览器存档,不会碰用户存档。常规 CI 仍跑 `npm test` 的 18 项规则/接口测试,3D 回归需要另行运行。
+
+2026-10-23 已用模拟触控和单帧截图验证本轮改动。真机帧率、发热、连续动画流畅度、自动画质降级效果和音效听感仍未验证。
+
 ---
 
 ## 9. 已知问题与限制
@@ -182,7 +193,7 @@ node tools/snapshot-dog.cjs eat.png --action doFeed --ms 3000   # 跑 3 秒喂�
 ## 10. 建议的下一步(按优先级)
 
 1. **请用户在手机上试 3D 小狗**,根据反馈调性能(毛层数 `buildDog({ layers })`、密度 `uDensity`、阴影贴图大小)和外观。这一步最重要,别闷头做新功能。
-2. **外观继续向「挠挠」靠**:更邋遢的长毛(加大 `furMask` 里眉毛胡子的长度、`tuft` 的随机性),耳朵颜色再浅一点,体型更像中型串串(腿稍长、嘴稍长)。每改一次都截图对比。
+2. **继续打磨写实感**:脸部的口鼻、眼睛、眉毛胡子和浅色半垂耳已完成第一轮调整;整体仍有毛绒玩具感。接下来重点看身体比例、腿和脚的结构、毛束质感,先做小范围对比,不要把一轮脸部调整当作整体写实已经完成。每改一次都截图对比。
 3. **补动作**:打滚、伸懒腰、讨食作揖、听到名字转头、跟着手指走;可以加「呼唤名字」按钮。
 4. **3D 页面接入存档同步**(复用 `storage.js` 的思路),并把服务器部署出去(需要用户提供平台账号)。
 5. 3D 页面加商店/装扮(项圈、小围巾),复用 `game.js` 的 `ITEMS`,挂在 `neck`/`head` 骨头上。
@@ -197,5 +208,6 @@ node tools/snapshot-dog.cjs eat.png --action doFeed --ms 3000   # 跑 3 秒喂�
 - 3D:`MeshPhysicalMaterial` 的 `transmission` 会让渲染器多画一遍场景,很耗性能。眼睛和水珠已改成透明 + clearcoat,不要再用 transmission。
 - 3D:球的活动范围必须小于狗能走到的范围,否则球滚到墙角,狗永远捡不到。现在还有 9 秒超时兜底。
 - 3D:镜头跟随会改变 `camera.position`,任何「相对镜头」计算的目标点都要在出发时算好再固定。
+- 3D:洗澡取消时必须移除泡泡、释放临时几何体、恢复 `uWet`;捡球取消时必须把球从下颌骨骼移回场景。不要只禁用按钮而遗漏真正的取消收尾。
 - 部署在子路径 `/cloud-pet/` 下,所有资源路径都必须是相对路径(importmap 用的是 `./vendor/...`)。
 - 提交信息用中文,写清楚改了什么、为什么。
