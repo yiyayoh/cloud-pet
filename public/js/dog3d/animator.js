@@ -5,14 +5,14 @@ import * as THREE from 'three';
 export const POSES = {
   stand: { rootY: 0, bones: {} },
   feed: {
-    rootY: -0.035,
+    rootY: -0.045,
     bones: {
       root: [0.06, 0, 0],
       shoulderL: [-0.55, 0, 0], shoulderR: [-0.55, 0, 0],
       elbowL: [1.05, 0, 0], elbowR: [1.05, 0, 0],
       hipL: [0.25, 0, 0], hipR: [0.25, 0, 0],
       kneeL: [-0.45, 0, 0], kneeR: [-0.45, 0, 0],
-      neck: [0.35, 0, 0], head: [-0.05, 0, 0],
+      neck: [0.55, 0, 0], head: [-0.25, 0, 0],
     },
   },
   sit: {
@@ -183,10 +183,7 @@ export class Animator {
 
     // 嘴、舌头
     b.jaw.rotation.x = v.jaw * 0.5;
-    this.dog.mouth.visible = v.jaw > 0.1;
-    this.dog.mouth.scale.y = 0.01 + v.jaw * 0.018;
     const tg = this.dog.tongue;
-    tg.visible = v.jaw > 0.12 || v.tongue > 0.1;
     tg.scale.z = 0.05 * (1 + 0.7 * v.tongue);
     tg.position.z = this._tongueZ ?? (this._tongueZ = tg.position.z);
     tg.position.z += 0.03 * v.tongue;
