@@ -13,8 +13,8 @@ const JOINTS = {
   neck: [V(0, 0.48, 0.25), 'chest'],
   head: [V(0, 0.58, 0.32), 'neck'],
   jaw: [V(0, 0.59, 0.40), 'head'],
-  earL: [V(0.088, 0.73, 0.35), 'head'],
-  earR: [V(-0.088, 0.73, 0.35), 'head'],
+  earL: [V(0.087, 0.715, 0.357), 'head'],
+  earR: [V(-0.087, 0.715, 0.357), 'head'],
   shoulderL: [V(0.09, 0.38, 0.2), 'chest'],
   elbowL: [V(0.09, 0.2, 0.22), 'shoulderL'],
   shoulderR: [V(-0.09, 0.38, 0.2), 'chest'],
@@ -28,20 +28,20 @@ const JOINTS = {
   tail3: [V(0, 0.56, -0.5), 'tail2'],
 };
 
-const EYE_L = V(0.052, 0.672, 0.468);
-const EYE_R = V(-0.052, 0.672, 0.468);
-const NOSE = V(0, 0.628, 0.6);
+const EYE_L = V(0.055, 0.666, 0.479);
+const EYE_R = V(-0.055, 0.666, 0.479);
+const NOSE = V(0, 0.626, 0.647);
 
 const BACK = V(0, -0.35, -1).normalize();
 const DOWN = V(0, -1, 0.05).normalize();
 const LEG = V(0, -1, -0.15).normalize();
 const TAIL = V(0, 0.35, -1).normalize();
-const BROWS = [V(0.05, 0.705, 0.452), V(-0.05, 0.705, 0.452)];
+const BROWS = [V(0.052, 0.692, 0.45), V(-0.052, 0.692, 0.45)];
 // 嘴巴线:鼻子下面的人中,再向两边弯到嘴角
-const MOUTH_PTS = [V(-0.04, 0.596, 0.535), V(-0.02, 0.594, 0.565), V(0, 0.6, 0.578), V(0.02, 0.594, 0.565), V(0.04, 0.596, 0.535)];
+const MOUTH_PTS = [V(-0.04, 0.594, 0.557), V(-0.025, 0.593, 0.599), V(0, 0.598, 0.624), V(0.025, 0.593, 0.599), V(0.04, 0.594, 0.557)];
 
 const WHITE = new THREE.Color('#EEE8DE');
-const CREAM = new THREE.Color('#CDB89C');
+const CREAM = new THREE.Color('#E5DAC8');
 const PALE = new THREE.Color('#F4F0E9');
 
 function ellipsoid(c, r, segs = [32, 24]) {
@@ -96,7 +96,8 @@ function parts() {
   const P = [];
   // comb:毛的倒向(向量,或按顶点位置算的函数)
   const add = (geo, bone, fur, color = WHITE, comb = BACK) => P.push({ geo, bone, fur, color, comb });
-  const fromNose = (p) => p.clone().sub(NOSE).normalize().add(V(0, 0.25, 0));
+  // 额头向口鼻、面颊向下梳,避免整张脸的毛从鼻子向外炸开。
+  const faceComb = (p) => V(Math.sign(p.x) * 0.24, -0.9, p.z > 0.5 ? 0.25 : -0.2);
   const J = (n) => JOINTS[n][0];
 
   add(ellipsoid(V(0, 0.40, 0.0), [0.16, 0.16, 0.28]), 'spine', 1.0);
@@ -104,17 +105,23 @@ function parts() {
   add(ellipsoid(V(0, 0.41, -0.2), [0.145, 0.155, 0.15]), 'root', 1.0);
   add(capsule(V(0, 0.47, 0.23), V(0, 0.58, 0.32), 0.096), 'neck', 1.3, WHITE, V(0, -0.7, -0.7));
 
-  add(ellipsoid(V(0, 0.665, 0.37), [0.115, 0.105, 0.12]), 'head', 0.85, WHITE, fromNose);
-  add(ellipsoid(V(0, 0.62, 0.405), [0.105, 0.075, 0.09]), 'head', 0.95, WHITE, fromNose);
-  add(ellipsoid(V(0, 0.612, 0.49), [0.06, 0.054, 0.115]), 'head', 0.6, PALE, fromNose);
-  add(ellipsoid(V(0, 0.578, 0.47), [0.046, 0.024, 0.09]), 'jaw', 0.55, PALE, V(0, -1, 0.25));
+  add(ellipsoid(V(0, 0.659, 0.368), [0.103, 0.088, 0.126]), 'head', 0.72, WHITE, faceComb);
+  add(ellipsoid(V(0, 0.62, 0.411), [0.091, 0.069, 0.101]), 'head', 1.05, WHITE, faceComb);
+  add(ellipsoid(V(0, 0.627, 0.518), [0.045, 0.037, 0.126]), 'head', 0.45, PALE, faceComb);
+  for (const s of [1, -1]) {
+    add(ellipsoid(V(0.027 * s, 0.607, 0.562), [0.034, 0.033, 0.074], [20, 14]), 'head', 0.8, PALE, faceComb);
+  }
+  add(ellipsoid(V(0, 0.58, 0.524), [0.041, 0.023, 0.114]), 'jaw', 0.7, PALE, V(0, -1, 0.15));
 
   for (const s of [1, -1]) {
     const L = s > 0 ? 'L' : 'R';
     const m = (v) => (s > 0 ? v : mirrorX(v));
     // 半垂的耳朵
-    const ear = ellipsoid(m(V(0.138, 0.645, 0.35)), [0.022, 0.1, 0.045]);
-    rotateAbout(ear, J(`ear${L}`), new THREE.Euler(0.18, 0, -0.16 * s));
+    const fold = ellipsoid(m(V(0.109, 0.691, 0.36)), [0.027, 0.052, 0.042], [20, 14]);
+    rotateAbout(fold, J(`ear${L}`), new THREE.Euler(0.15, 0, -0.28 * s));
+    add(fold, `ear${L}`, 0.8, CREAM, DOWN);
+    const ear = ellipsoid(m(V(0.132, s > 0 ? 0.643 : 0.651, 0.375)), [0.022, 0.069, 0.041]);
+    rotateAbout(ear, J(`ear${L}`), new THREE.Euler(s > 0 ? 0.22 : 0.3, 0, -0.2 * s));
     add(ear, `ear${L}`, 0.95, CREAM, DOWN);
     // 前腿
     add(capsule(m(V(0.09, 0.38, 0.2)), m(V(0.09, 0.2, 0.22)), 0.055), `shoulder${L}`, 0.9, WHITE, LEG);
@@ -135,7 +142,7 @@ function parts() {
 // 眼睛、鼻子、嘴角周围毛很短,不然会被毛盖住;眉毛和胡子长一些,看起来更邋遢
 function furMask(p, bone) {
   const d = Math.min(p.distanceTo(EYE_L), p.distanceTo(EYE_R));
-  const eye = THREE.MathUtils.clamp((d - 0.02) / 0.035, 0.12, 1);
+  const eye = THREE.MathUtils.clamp((d - 0.024) / 0.028, 0.08, 1);
   const nose = THREE.MathUtils.clamp((p.distanceTo(NOSE) - 0.02) / 0.03, 0.05, 1);
   const lip = THREE.MathUtils.clamp((Math.min(...MOUTH_PTS.map((m) => p.distanceTo(m))) - 0.006) / 0.02, 0.15, 1);
   let boost = 1;
@@ -143,14 +150,15 @@ function furMask(p, bone) {
   if (bone === 'head' || bone === 'jaw') {
     const brow = Math.min(...BROWS.map((b) => p.distanceTo(b)));
     if (brow < 0.04) {
-      boost += 0.9 * (1 - brow / 0.04);
-      comb = V(Math.sign(p.x) * 0.3, 0.6, 1);
+      boost += 1.15 * (1 - brow / 0.04);
+      comb = V(Math.sign(p.x) * 0.35, 0.15, 0.8);
     }
-    if (p.z > 0.44 && p.y < 0.615) {
-      const beard = THREE.MathUtils.clamp((0.615 - p.y) / 0.03, 0, 1);
-      boost += 0.9 * beard;
-      if (beard > 0.2) comb = V(Math.sign(p.x) * 0.4, -1, 0.35);
+    if (p.z > 0.48 && p.y < 0.603) {
+      const beard = THREE.MathUtils.clamp((0.603 - p.y) / 0.035, 0, 1);
+      boost += (bone === 'jaw' ? 1.0 : 0.45) * beard;
+      if (beard > 0.2) comb = V(Math.sign(p.x) * 0.24, -1, 0.15);
     }
+    boost *= 0.95 + 0.2 * Math.sin(p.x * 91 + p.z * 37) * Math.sin(p.y * 83);
   }
   return { len: eye * nose * lip * boost, comb };
 }
@@ -318,7 +326,7 @@ export function buildDog({ layers = 32 } = {}) {
   // 不长毛的部分:眼睛、鼻子、嘴、舌头
   const local = (bone, world) => world.clone().sub(JOINTS[bone][0]);
   // 眼睛:棕色虹膜 + 黑瞳孔 + 一层亮亮的角膜 + 一圈深色眼眶
-  const irisMat = new THREE.MeshStandardMaterial({ color: '#4A2410', roughness: 0.5 });
+  const irisMat = new THREE.MeshStandardMaterial({ color: '#352314', roughness: 0.45 });
   const pupilMat = new THREE.MeshStandardMaterial({ color: '#080403', roughness: 0.4 });
   const corneaMat = new THREE.MeshPhysicalMaterial({ color: '#000000', roughness: 0.02, clearcoat: 1, clearcoatRoughness: 0, transparent: true, opacity: 0.22, depthWrite: false });
   const rimMat = new THREE.MeshStandardMaterial({ color: '#1E1612', roughness: 0.7 });
@@ -326,15 +334,19 @@ export function buildDog({ layers = 32 } = {}) {
     const e = new THREE.Group();
     e.position.copy(local('head', w));
     // 眼睛朝向:从头骨中心往外,再稍微朝前
-    const out = w.clone().sub(V(0, 0.665, 0.37)).normalize().add(V(0, 0, 0.9)).normalize();
+    const out = w.clone().sub(V(0, 0.659, 0.368)).normalize().add(V(0, 0, 0.9)).normalize();
     e.quaternion.setFromUnitVectors(V(0, 0, 1), out);
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.0172, 28, 20), irisMat);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.0172, 28, 20, 0, Math.PI * 2, 0, 0.42), pupilMat);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.0143, 28, 20), irisMat);
+    ball.scale.y = 0.76;
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.0143, 28, 20, 0, Math.PI * 2, 0, 0.6), pupilMat);
     pupil.rotation.x = Math.PI / 2;
     pupil.scale.setScalar(1.004);
-    const cornea = new THREE.Mesh(new THREE.SphereGeometry(0.0182, 28, 20), corneaMat);
-    const lid = new THREE.Mesh(new THREE.TorusGeometry(0.0168, 0.0035, 10, 32), rimMat);
-    lid.position.z = 0.006;
+    pupil.scale.z *= 0.76;
+    const cornea = new THREE.Mesh(new THREE.SphereGeometry(0.0151, 28, 20), corneaMat);
+    cornea.scale.y = 0.76;
+    const lidPoints = [[-1, 0], [-0.6, 0.57], [0, 0.76], [0.6, 0.57], [1, 0], [0.6, -0.5], [0, -0.64], [-0.6, -0.5]]
+      .map(([x, y]) => V(x * 0.0143, y * 0.0143, 0.007));
+    const lid = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(lidPoints, true), 48, 0.0012, 8, true), rimMat);
     e.add(ball, pupil, cornea, lid);
     e.scale.z = 0.75;
     bones.head.add(e);
@@ -342,28 +354,28 @@ export function buildDog({ layers = 32 } = {}) {
   });
 
   // 鼻子:皮革质感 + 两个鼻孔
-  const noseMat = new THREE.MeshPhysicalMaterial({ color: '#1a1414', roughness: 0.5, clearcoat: 0.45, clearcoatRoughness: 0.35, bumpMap: leatherTexture(), bumpScale: 1.2 });
+  const noseMat = new THREE.MeshPhysicalMaterial({ color: '#1a1414', roughness: 0.5, clearcoat: 0.45, clearcoatRoughness: 0.35, bumpMap: leatherTexture(), bumpScale: 0.006 });
   const nose = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), noseMat);
-  nose.scale.set(0.021, 0.015, 0.016);
+  nose.scale.set(0.025, 0.016, 0.018);
   nose.position.copy(local('head', NOSE));
   bones.head.add(nose);
   const nostrilMat = new THREE.MeshStandardMaterial({ color: '#050303', roughness: 0.9 });
   for (const s of [1, -1]) {
     const n = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), nostrilMat);
     n.scale.set(0.0055, 0.0032, 0.004);
-    n.position.copy(local('head', V(0.0085 * s, 0.6255, 0.6145)));
+    n.position.copy(local('head', V(0.011 * s, NOSE.y - 0.0025, NOSE.z + 0.016)));
     n.rotation.z = 0.5 * s;
     bones.head.add(n);
   }
   // 人中和嘴巴线
   const lipCurve = new THREE.CatmullRomCurve3(MOUTH_PTS.map((v) => local('head', v)));
-  const lip = new THREE.Mesh(new THREE.TubeGeometry(lipCurve, 24, 0.0018, 6, false), rimMat);
-  const philtrum = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(local('head', V(0, 0.613, 0.592)), local('head', V(0, 0.6, 0.579))), 2, 0.0015, 6, false), rimMat);
+  const lip = new THREE.Mesh(new THREE.TubeGeometry(lipCurve, 24, 0.0012, 6, false), rimMat);
+  const philtrum = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(local('head', V(0, 0.612, 0.642)), local('head', V(0, 0.598, 0.624))), 2, 0.0008, 6, false), rimMat);
   bones.head.add(lip, philtrum);
 
   const mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshStandardMaterial({ color: '#3a1616', roughness: 0.6 }));
-  mouth.scale.set(0.042, 0.012, 0.08);
-  mouth.position.copy(local('head', V(0, 0.594, 0.495)));
+  mouth.scale.set(0.036, 0.01, 0.102);
+  mouth.position.copy(local('head', V(0, 0.594, 0.535)));
   bones.head.add(mouth);
 
   const tongue = new THREE.Mesh(
@@ -371,7 +383,7 @@ export function buildDog({ layers = 32 } = {}) {
     new THREE.MeshPhysicalMaterial({ color: '#E57D88', roughness: 0.35, clearcoat: 0.4 }),
   );
   tongue.scale.set(0.028, 0.007, 0.05);
-  tongue.position.copy(local('jaw', V(0, 0.59, 0.505)));
+  tongue.position.copy(local('jaw', V(0, 0.59, 0.558)));
   bones.jaw.add(tongue);
 
   // 点击检测用的隐形球
@@ -389,5 +401,9 @@ export function buildDog({ layers = 32 } = {}) {
     return m;
   });
 
-  return { group, base, shells, bones, uniforms, eyes, tongue, hit, joints: JOINTS };
+  const carryPoint = local('jaw', V(0, 0.594, NOSE.z - 0.012));
+  const mouthPoint = new THREE.Object3D();
+  mouthPoint.position.copy(local('head', V(0, 0.598, 0.624)));
+  bones.head.add(mouthPoint);
+  return { group, base, shells, bones, uniforms, eyes, tongue, mouth, hit, nose, mouthPoint, carryPoint, joints: JOINTS };
 }

@@ -436,48 +436,53 @@ function doFeed() {
     t.cleanups.push(() => {
       bowl.userData.food.visible = false;
       anim.chew = false;
+      if (anim.pose === 'feed') anim.setPose('stand');
     });
-      bowl.userData.food.visible = true;
-      sfx.kibble();
-      await standUp(t);
-      anim.set('ears', 0.7);
-      happy(1);
-      anim.lookAt.copy(bowl.position);
-      anim.set('look', 0.6);
-      const reason = G.canFeed(state, 'rice');
-      await moveTo(() => bowl.position, 0.9, 0.5, t);
-      await faceTowards(bowl.position, t);
-      anim.set('look', 0);
-      anim.set('headDown', 1);
-      await wait(600, t);
-      if (reason === 'full') {
-        await wait(700, t);
-        anim.set('headDown', 0);
-        toast('它闻了闻……现在还不饿');
-        calm();
-        lookAtCamera();
-        return;
-      }
-      anim.chew = true;
-      for (let i = 0; i < 10; i++) {
-        sfx.chew();
-        await wait(260, t);
-      }
-      anim.chew = false;
-      bowl.userData.food.visible = false;
-      after(G.feed(state, 'rice'));
-      anim.set('jaw', 0.25);
-      anim.set('tongue', 1);
-      await wait(500, t);
+    bowl.userData.food.visible = true;
+    sfx.kibble();
+    await standUp(t);
+    anim.set('ears', 0.7);
+    happy(1);
+    anim.lookAt.copy(bowl.position);
+    anim.set('look', 0.6);
+    const reason = G.canFeed(state, 'rice');
+    // 口鼻的前伸距离会随成长缩放,幼崽也要能真正够到饭碗。
+    await moveTo(() => bowl.position, 0.9, 0.34 * dog.group.scale.x, t);
+    await faceTowards(bowl.position, t);
+    anim.set('look', 0);
+    anim.setPose('feed');
+    anim.set('headDown', 1);
+    await wait(800, t);
+    if (reason === 'full') {
+      await wait(700, t);
       anim.set('headDown', 0);
-      anim.set('tongue', 0);
-      anim.set('jaw', 0);
-      lookAtCamera();
-      await faceTowards(camera.position, t);
-      happy(1);
-      toast(pick(['吃得干干净净!', '舔了舔嘴巴,心满意足']));
-      await wait(1200, t);
+      anim.setPose('stand');
+      toast('它闻了闻……现在还不饿');
       calm();
+      lookAtCamera();
+      return;
+    }
+    anim.chew = true;
+    for (let i = 0; i < 10; i++) {
+      sfx.chew();
+      await wait(260, t);
+    }
+    anim.chew = false;
+    bowl.userData.food.visible = false;
+    after(G.feed(state, 'rice'));
+    anim.set('jaw', 0.25);
+    anim.set('tongue', 1);
+    await wait(500, t);
+    anim.set('headDown', 0);
+    anim.setPose('stand');
+    anim.set('tongue', 0);
+    anim.set('jaw', 0);
+    lookAtCamera();
+    await faceTowards(camera.position, t);
+    happy(1);
+    toast(pick(['吃得干干净净!', '舔了舔嘴巴,心满意足']));
+    await wait(1200, t);
+    calm();
   }, { lock: true });
 }
 
@@ -540,51 +545,51 @@ function fetchBall() {
       }
       anim.pant = false;
     });
-      anim.set('ears', 0.9);
-      happy(1.4);
-      anim.lookAt.copy(ball.position);
-      anim.set('look', 0.6);
-      await standUp(t);
-      anim.pant = true;
-      anim.set('tongue', 0.7);
-      // 追着球跑,直到球停下并且到嘴边
-      const giveUp = performance.now() + 9000;
-      await moveTo(() => ball.position, 1.7, 0.42, t);
-      while (ballMoving && performance.now() < giveUp) await moveTo(() => ball.position, 1.4, 0.42, t);
-      ballMoving = false;
-      await moveTo(() => ball.position, 1.0, 0.42, t);
-      anim.pant = false;
-      anim.set('tongue', 0);
-      await faceTowards(ball.position, t);
-      anim.set('look', 0);
-      anim.set('headDown', 1);
-      anim.set('jaw', 0.6);
-      await wait(450, t);
-      dog.bones.jaw.attach(ball);
-      ball.position.set(0, -0.012, 0.13);
-      anim.set('jaw', 0.28);
-      anim.set('headDown', 0);
-      sfx.squeak();
-      await wait(250, t);
-      anim.lookAt.copy(camera.position);
-      anim.set('look', 0.5);
-      await moveTo(homePoint(), 1.2, 0.04, t);
-      await faceTowards(camera.position, t);
-      anim.setPose('sit');
-      await wait(500, t);
-      anim.set('jaw', 0.6);
-      await wait(150, t);
-      scene.attach(ball);
-      ballVel.set(rand(-0.2, 0.2), 0, 0.3);
-      ballMoving = true;
-      anim.set('jaw', 0);
-      lookAtCamera();
-      happy(1.4);
-      anim.pant = true;
-      anim.set('tongue', 1);
-      after(G.playBall(state));
-      await wait(1800, t);
-      calm();
+    anim.set('ears', 0.9);
+    happy(1.4);
+    anim.lookAt.copy(ball.position);
+    anim.set('look', 0.6);
+    await standUp(t);
+    anim.pant = true;
+    anim.set('tongue', 0.7);
+    // 追着球跑,直到球停下并且到嘴边
+    const giveUp = performance.now() + 9000;
+    await moveTo(() => ball.position, 1.7, 0.42, t);
+    while (ballMoving && performance.now() < giveUp) await moveTo(() => ball.position, 1.4, 0.42, t);
+    ballMoving = false;
+    await moveTo(() => ball.position, 1.0, 0.42, t);
+    anim.pant = false;
+    anim.set('tongue', 0);
+    await faceTowards(ball.position, t);
+    anim.set('look', 0);
+    anim.set('headDown', 1);
+    anim.set('jaw', 0.6);
+    await wait(450, t);
+    dog.bones.jaw.attach(ball);
+    ball.position.copy(dog.carryPoint);
+    anim.set('jaw', 0.28);
+    anim.set('headDown', 0);
+    sfx.squeak();
+    await wait(250, t);
+    anim.lookAt.copy(camera.position);
+    anim.set('look', 0.5);
+    await moveTo(homePoint(), 1.2, 0.04, t);
+    await faceTowards(camera.position, t);
+    anim.setPose('sit');
+    await wait(500, t);
+    anim.set('jaw', 0.6);
+    await wait(150, t);
+    scene.attach(ball);
+    ballVel.set(rand(-0.2, 0.2), 0, 0.3);
+    ballMoving = true;
+    anim.set('jaw', 0);
+    lookAtCamera();
+    happy(1.4);
+    anim.pant = true;
+    anim.set('tongue', 1);
+    after(G.playBall(state));
+    await wait(1800, t);
+    calm();
   }, { lock: true });
 }
 
@@ -612,46 +617,46 @@ function doBath() {
         particles.splice(i, 1);
       }
     });
-      await standUp(t);
-      await faceTowards(camera.position, t);
-      anim.set('ears', -0.5);
-      anim.set('wag', 0.05);
-      anim.set('eyes', 0.4);
-      sfx.splash();
-      // 毛被打湿、塌下来
-      for (let i = 0; i < 20; i++) { wet.value = Math.min(1, wet.value + 0.05); await wait(40, t); }
-      for (let i = 0; i < 46; i++) {
-        const bone = pick(['spine', 'chest', 'root', 'neck', 'head']);
-        const m = new THREE.Mesh(new THREE.SphereGeometry(rand(0.012, 0.03), 10, 8), foamMat);
-        const dir = new THREE.Vector3(rand(-1, 1), rand(0.2, 1), rand(-1, 1)).normalize();
-        const r = bone === 'head' ? 0.11 : 0.15;
-        m.position.copy(dir.multiplyScalar(r)).add(bone === 'head' ? new THREE.Vector3(0, 0.08, 0.05) : new THREE.Vector3(0, 0, 0));
-        dog.bones[bone].add(m);
-        foam.push(m);
-        if (i % 4 === 0) { sfx.bubble(); await wait(60, t); }
-      }
-      while (state.stats.clean < 100) G.scrub(state);
-      await wait(900, t);
-      clearFoam();
-      toast('冲干净啦,它要甩水了!');
-      await wait(300, t);
-      anim.shake = 1.4;
-      sfx.shake();
-      const origin = new THREE.Vector3();
-      for (let i = 0; i < 70; i++) {
-        dog.bones.spine.getWorldPosition(origin);
-        const d = new THREE.Mesh(new THREE.SphereGeometry(rand(0.004, 0.009), 6, 4), dropMat);
-        d.position.copy(origin).add(new THREE.Vector3(rand(-0.15, 0.15), rand(0, 0.2), rand(-0.2, 0.2)));
-        fxGroup.add(d);
-        particles.push({ m: d, v: new THREE.Vector3(rand(-2, 2), rand(0.5, 2.2), rand(-2, 2)), life: 1.2, owner: t });
-      }
-      for (let i = 0; i < 30; i++) { wet.value = Math.max(0.15, wet.value - 0.03); await wait(50, t); }
-      anim.set('eyes', 1);
-      happy(1);
-      lookAtCamera();
-      after();
-      for (let i = 0; i < 30; i++) { wet.value = Math.max(0, wet.value - 0.01); await wait(80, t); }
-      calm();
+    await standUp(t);
+    await faceTowards(camera.position, t);
+    anim.set('ears', -0.5);
+    anim.set('wag', 0.05);
+    anim.set('eyes', 0.4);
+    sfx.splash();
+    // 毛被打湿、塌下来
+    for (let i = 0; i < 20; i++) { wet.value = Math.min(1, wet.value + 0.05); await wait(40, t); }
+    for (let i = 0; i < 46; i++) {
+      const bone = pick(['spine', 'chest', 'root', 'neck', 'head']);
+      const m = new THREE.Mesh(new THREE.SphereGeometry(rand(0.012, 0.03), 10, 8), foamMat);
+      const dir = new THREE.Vector3(rand(-1, 1), rand(0.2, 1), rand(-1, 1)).normalize();
+      const r = bone === 'head' ? 0.11 : 0.15;
+      m.position.copy(dir.multiplyScalar(r)).add(bone === 'head' ? new THREE.Vector3(0, 0.08, 0.05) : new THREE.Vector3(0, 0, 0));
+      dog.bones[bone].add(m);
+      foam.push(m);
+      if (i % 4 === 0) { sfx.bubble(); await wait(60, t); }
+    }
+    while (state.stats.clean < 100) G.scrub(state);
+    await wait(900, t);
+    clearFoam();
+    toast('冲干净啦,它要甩水了!');
+    await wait(300, t);
+    anim.shake = 1.4;
+    sfx.shake();
+    const origin = new THREE.Vector3();
+    for (let i = 0; i < 70; i++) {
+      dog.bones.spine.getWorldPosition(origin);
+      const d = new THREE.Mesh(new THREE.SphereGeometry(rand(0.004, 0.009), 6, 4), dropMat);
+      d.position.copy(origin).add(new THREE.Vector3(rand(-0.15, 0.15), rand(0, 0.2), rand(-0.2, 0.2)));
+      fxGroup.add(d);
+      particles.push({ m: d, v: new THREE.Vector3(rand(-2, 2), rand(0.5, 2.2), rand(-2, 2)), life: 1.2, owner: t });
+    }
+    for (let i = 0; i < 30; i++) { wet.value = Math.max(0.15, wet.value - 0.03); await wait(50, t); }
+    anim.set('eyes', 1);
+    happy(1);
+    lookAtCamera();
+    after();
+    for (let i = 0; i < 30; i++) { wet.value = Math.max(0, wet.value - 0.01); await wait(80, t); }
+    calm();
   }, { lock: true });
 }
 
@@ -1039,8 +1044,10 @@ document.addEventListener('visibilitychange', () => {
 const camGoal = new THREE.Vector3();
 function followDog(dt) {
   const p = dog.group.position;
-  camGoal.set(p.x * 0.85, 0.33, p.z * 0.85 + 0.05);
-  const k = 1 - Math.exp(-2.2 * dt);
+  // 奔跑时及时跟上,并稍微偏向头部;竖屏追球时口鼻不能跑出画面。
+  const lead = 0.18 * dog.group.scale.x;
+  camGoal.set(p.x + Math.sin(heading()) * lead, 0.33, p.z + Math.cos(heading()) * lead);
+  const k = 1 - Math.exp(-(move && !move.faceOnly ? 14 : 3.5) * dt);
   const dx = (camGoal.x - controls.target.x) * k;
   const dz = (camGoal.z - controls.target.z) * k;
   controls.target.x += dx;
